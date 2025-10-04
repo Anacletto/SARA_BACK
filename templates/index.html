@@ -1,10 +1,646 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>SIGA Angola Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIGA-Angola - Environmental Risk Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .sidebar {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+        }
+
+        .location-selector {
+            margin-bottom: 30px;
+        }
+
+        .location-selector select {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background: #34495e;
+            color: white;
+        }
+
+        .location-info {
+            background: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .risk-indicators {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .risk-indicator {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #34495e;
+            border-radius: 5px;
+        }
+
+        .risk-level {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .risk-low { background: #27ae60; }
+        .risk-medium { background: #f39c12; }
+        .risk-high { background: #e74c3c; }
+        .risk-critical { background: #c0392b; }
+
+        .main-content {
+            padding: 20px;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 20px;
+        }
+
+        .overview-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 300px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .alerts {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .alert-item {
+            padding: 10px;
+            border-left: 4px solid #f39c12;
+            background: white;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .alert-critical {
+            border-left-color: #e74c3c;
+            background: #ffeaea;
+        }
+
+        .map-container {
+            height: 300px;
+            background: #e8f4f8;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .api-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 0.8rem;
+        }
+
+        .status-online {
+            color: #27ae60;
+        }
+
+        .status-offline {
+            color: #e74c3c;
+        }
+
+        .data-source {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+    </style>
 </head>
 <body>
-    <h1>SIGA Angola Unified Dashboard</h1>
-    <p>Welcome to the Angola Environmental Monitoring System</p>
+    <div class="api-status" id="apiStatus">
+        <span class="status-online">●</span> API Online
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🚀 SIGA-Angola</h1>
+            <p>Unified NASA Environmental Risk Dashboard</p>
+        </div>
+
+        <div class="dashboard">
+            <div class="sidebar">
+                <div class="location-selector">
+                    <select id="provinceSelect">
+                        <option value="">Select Province</option>
+                    </select>
+                    <select id="municipalitySelect">
+                        <option value="">Select Municipality</option>
+                    </select>
+                    <button onclick="loadRealData()" style="width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Load Real Data
+                    </button>
+                </div>
+
+                <div class="location-info" id="locationInfo">
+                    <h3>Location Information</h3>
+                    <p>Select a location to view real NASA data</p>
+                </div>
+
+                <div class="risk-indicators" id="riskIndicators">
+                    <!-- Risk indicators will be populated here -->
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="overview-cards">
+                    <div class="card">
+                        <h3>Overall Safety Score</h3>
+                        <div class="value" id="safetyScore">-</div>
+                        <div class="data-source" id="safetySource">-</div>
+                    </div>
+                    <div class="card">
+                        <h3>Environmental Health</h3>
+                        <div class="value" id="envHealth">-</div>
+                        <div class="data-source" id="envSource">-</div>
+                    </div>
+                    <div class="card">
+                        <h3>Active Alerts</h3>
+                        <div class="value" id="activeAlerts">-</div>
+                        <div class="data-source">Real-time monitoring</div>
+                    </div>
+                </div>
+
+                <div class="charts">
+                    <div class="chart-container">
+                        <canvas id="riskChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="environmentChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+
+                <div class="alerts">
+                    <h3>Recent Alerts & Notifications</h3>
+                    <div id="alertsList">
+                        <div class="loading">Select a location to view alerts</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([-8.8383, 13.2344], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let currentCharts = {};
+
+        // Load provinces and municipalities from API
+        async function loadLocations() {
+            try {
+                const response = await fetch('/api/provinces');
+                const data = await response.json();
+                console.log(data)
+                
+                const provinceSelect = document.getElementById('provinceSelect');
+                provinceSelect.innerHTML = '<option value="">Select Province</option>';
+                
+                data.forEach(province => {
+                    const option = document.createElement('option');
+                    option.value = province.id;
+                    option.textContent = `${province.name} (${province.municipality_count} municipalities)`;
+                    provinceSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading provinces:', error);
+                alert('Error loading provinces from API');
+            }
+        }
+
+        // Update municipalities when province changes
+        document.getElementById('provinceSelect').addEventListener('change', async function() {
+            const municipalitySelect = document.getElementById('municipalitySelect');
+            municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+            
+            if (this.value) {
+                try {
+                    const response = await fetch(`/api/${this.value}`);
+                    const data = await response.json();
+                    console.log(data)
+
+                    data.municipalities.forEach(municipality => {
+                        const option = document.createElement('option');
+    
+                        option.textContent = municipality;
+                        municipalitySelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading municipalities:', error);
+                }
+            }
+        });
+
+        // Load real data from API
+        async function loadRealData() {
+            const province = document.getElementById('provinceSelect').value;
+            const municipality = document.getElementById('municipalitySelect').value;
+            
+            if (!province) {
+                alert('Please select a province');
+                return;
+            }
+
+            document.getElementById('alertsList').innerHTML = '<div class="loading">Loading real NASA data...</div>';
+            
+            try {
+                let apiUrl;
+                if (municipality) {
+                    apiUrl = `/api/${province}/${municipality}`;
+                    console.log(`l=> ${apiUrl}`)
+                } else {
+                    apiUrl = `/api/${province}`;
+                }
+
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const realData = await response.json();
+                console.log(realData)
+                updateDashboardWithRealData(realData.alerts, province, municipality);
+                
+            } catch (error) {
+                console.error('Error loading real data:', error);
+                document.getElementById('alertsList').innerHTML = `
+                    <div class="alert-item alert-critical">
+                        <strong>Error Loading Data</strong>
+                        <p>Failed to load data from API: ${error.message}</p>
+                        <small>Please try again or check API status</small>
+                    </div>
+                `;
+            }
+        }
+
+        function updateDashboardWithRealData(data, province, municipality) {
+            // Update overview cards with real data
+            const dashboard = data.dashboard;
+            const riskAssessment = data.risk_assessment;
+            const environmentalData = data.environmental_assessment;
+            const alertsData = data.alerts;
+            const nasaSources = data.nasa_data_sources;
+
+            document.getElementById('safetyScore').textContent = dashboard.overall_safety_score;
+            document.getElementById('safetySource').textContent = `Data: ${dashboard.data_freshness}`;
+            
+            document.getElementById('envHealth').textContent = environmentalData.environmental_health_index;
+            document.getElementById('envSource').textContent = `Quality: ${environmentalData.environmental_quality}`;
+            
+            document.getElementById('activeAlerts').textContent = alertsData.total_alerts;
+
+            // Update location info with real data
+            const locationInfo = dashboard.location;
+            document.getElementById('locationInfo').innerHTML = `
+                <h3>${locationInfo.name}</h3>
+                <p>Type: ${locationInfo.type}</p>
+                <p>Population: ${locationInfo.demographics.population?.toLocaleString() || 'N/A'}</p>
+                <p>Density: ${locationInfo.demographics.density_km2?.toLocaleString() || 'N/A'}/km²</p>
+                <p>Data Source: Real NASA API</p>
+            `;
+
+            // Update risk indicators with real data
+            const riskIndicators = document.getElementById('riskIndicators');
+            const detailedRisks = riskAssessment.detailed_risks;
+            
+            riskIndicators.innerHTML = Object.entries(detailedRisks).map(([riskType, riskData]) => `
+                <div class="risk-indicator">
+                    <span>${riskType.replace('_', ' ').toUpperCase()}</span>
+                    <span class="risk-level ${getRiskClass(riskData.score)}">
+                        ${riskData.score} (${riskData.level})
+                    </span>
+                </div>
+            `).join('');
+
+            // Update charts with real data
+            updateChartsWithRealData(detailedRisks, environmentalData);
+            
+            // Update alerts with real data
+            updateAlertsWithRealData(alertsData, province, municipality);
+            
+            // Update map with location coordinates
+            updateMapWithRealData(locationInfo);
+        }
+
+        function getRiskClass(score) {
+            if (score >= 80) return 'risk-critical';
+            if (score >= 60) return 'risk-high';
+            if (score >= 40) return 'risk-medium';
+            return 'risk-low';
+        }
+
+        function updateChartsWithRealData(risks, environmentalData) {
+            // Destroy existing charts
+            Object.values(currentCharts).forEach(chart => {
+                if (chart) chart.destroy();
+            });
+
+            // Risk Chart
+            const riskCtx = document.getElementById('riskChart').getContext('2d');
+            currentCharts.risk = new Chart(riskCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(risks).map(key => 
+                        key.replace('_', ' ').toUpperCase()
+                    ),
+                    datasets: [{
+                        label: 'Risk Score',
+                        data: Object.values(risks).map(risk => risk.score),
+                        backgroundColor: Object.values(risks).map(risk => 
+                            getRiskColor(risk.score)
+                        ),
+                        borderColor: Object.values(risks).map(risk => 
+                            getRiskColor(risk.score)
+                        ),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Real-time Risk Assessment'
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Risk Score'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Environment Chart
+            const envCtx = document.getElementById('environmentChart').getContext('2d');
+            
+            // Calculate environmental metrics from real data
+            const envMetrics = environmentalData.detailed_metrics || {};
+            const envLabels = Object.keys(envMetrics).map(key => 
+                key.replace('_', ' ').toUpperCase()
+            );
+            const envData = Object.values(envMetrics).map(metric => 
+                metric.score || 0
+            );
+
+            currentCharts.environment = new Chart(envCtx, {
+                type: 'radar',
+                data: {
+                    labels: envLabels,
+                    datasets: [{
+                        label: 'Environmental Impact',
+                        data: envData,
+                        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                        borderColor: 'rgba(52, 152, 219, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(52, 152, 219, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Environmental Health Metrics'
+                        }
+                    },
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                stepSize: 20
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function getRiskColor(score) {
+            if (score >= 80) return '#e74c3c';
+            if (score >= 60) return '#f39c12';
+            if (score >= 40) return '#f1c40f';
+            return '#27ae60';
+        }
+
+        function updateAlertsWithRealData(alertsData, province, municipality) {
+            const alertsList = document.getElementById('alertsList');
+            
+            if (alertsData.active_alerts && alertsData.active_alerts.length > 0) {
+                alertsList.innerHTML = alertsData.active_alerts.map(alert => `
+                    <div class="alert-item ${alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'alert-critical' : ''}">
+                        <strong>${alert.type.replace(/_/g, ' ')}</strong>
+                        <p>${alert.description}</p>
+                        <small>Severity: ${alert.severity} • Issued: ${new Date(alert.issued_at).toLocaleString()}</small>
+                        ${alert.recommended_actions ? `
+                            <div style="margin-top: 8px; font-size: 0.9rem;">
+                                <strong>Recommended Actions:</strong>
+                                <ul style="margin: 5px 0; padding-left: 20px;">
+                                    ${alert.recommended_actions.map(action => `<li>${action}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } else {
+                alertsList.innerHTML = `
+                    <div class="alert-item">
+                        <strong>No Active Alerts</strong>
+                        <p>All systems normal for ${municipality || province}</p>
+                        <small>Last checked: ${new Date().toLocaleString()}</small>
+                    </div>
+                `;
+            }
+        }
+
+        function updateMapWithRealData(locationInfo) {
+            // Clear existing markers
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Add marker for selected location
+            if (locationInfo.coordinates) {
+                const { latitude, longitude } = locationInfo.coordinates;
+                L.marker([latitude, longitude])
+                    .addTo(map)
+                    .bindPopup(`
+                        <strong>${locationInfo.name}</strong><br>
+                        ${locationInfo.type}<br>
+                        Population: ${locationInfo.demographics.population?.toLocaleString() || 'N/A'}<br>
+                        Density: ${locationInfo.demographics.density_km2?.toLocaleString() || 'N/A'}/km²
+                    `)
+                    .openPopup();
+                
+                map.setView([latitude, longitude], locationInfo.type === 'PROVINCE' ? 8 : 12);
+            }
+        }
+
+        // Check API status
+        async function checkAPIStatus() {
+            try {
+                const response = await fetch('/api/status');
+                if (response.ok) {
+                    const status = await response.json();
+                    document.getElementById('apiStatus').innerHTML = `
+                        <span class="status-online">●</span> 
+                        ${status.system} • ${status.data_coverage.provinces} Provinces • ${status.data_coverage.municipalities} Municipalities
+                    `;
+                } else {
+                    throw new Error('API not responding');
+                }
+            } catch (error) {
+                document.getElementById('apiStatus').innerHTML = `
+                    <span class="status-offline">●</span> API Offline
+                `;
+            }
+        }
+
+        // Initialize the application
+        async function initializeApp() {
+            await loadLocations();
+            await checkAPIStatus();
+            
+            // Check status every 30 seconds
+            setInterval(checkAPIStatus, 30000);
+        }
+
+        // Start the application
+        initializeApp();
+    </script>
 </body>
 </html>

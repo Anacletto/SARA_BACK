@@ -290,12 +290,6 @@ class LuandaGeoData:
                 "risk_profile": {"coastal": 0.6, "agricultural": 0.8, "drought": 0.5, "infrastructure": 0.6},
                 "economic_base": "agriculture", "development_index": "medium", "climate_zone": "coastal"
             },
-            "BENGUELA": {
-                "name": "Benguela", "capital": "Benguela", "population": 2200000, "area_km2": 31788,
-                "municipalities": ["BENGUELA_CITY", "LOBITO"],
-                "risk_profile": {"coastal": 0.7, "agricultural": 0.7, "drought": 0.5, "industrial": 0.5},
-                "economic_base": "port_agriculture", "development_index": "medium", "climate_zone": "coastal"
-            },
             "BIC": {
                 "name": "Bié", "capital": "Cuíto", "population": 1600000, "area_km2": 70314,
                 "municipalities": [],
@@ -358,7 +352,29 @@ class LuandaGeoData:
         """Get all municipalities across all provinces"""
         return list(self.municipalities.values())
     
+    def get_all_provinces(self) -> List[str]:
+        """Get list of all province names"""
+        return list(self.provinces.keys())
+    
     def get_province_for_municipality(self, municipality_id: str) -> str:
         """Get province for a municipality"""
         mun = self.municipalities.get(municipality_id)
         return mun.province if mun else "UNKNOWN"
+
+def load_provinces():
+    """Load all provinces data - fixed version"""
+    geo_data = LuandaGeoData()
+    return geo_data.provinces
+
+def load_municipalities():
+    """Load all municipalities organized by province - fixed version"""
+    geo_data = LuandaGeoData()
+    municipalities_by_province = {}
+    
+    for municipality in geo_data.municipalities.values():
+        province = municipality.province
+        if province not in municipalities_by_province:
+            municipalities_by_province[province] = []
+        municipalities_by_province[province].append(municipality.name)
+    
+    return municipalities_by_province

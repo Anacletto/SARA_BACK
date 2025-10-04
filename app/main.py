@@ -55,15 +55,29 @@ async def get_status():
         "auth_method": nasa_service.auth_method if nasa_service else "unknown"
     }
 
+
 @app.get("/api/provinces")
 async def get_all_provinces():
-    return list(provinces.keys())
+    province_list = []
+    for province_id, province_data in provinces.items():
+        province_list.append({
+            "id": province_id,
+            "name": province_data["name"],
+            "capital": province_data["capital"],
+            "population": province_data["population"],
+            "area_km2": province_data["area_km2"],
+            "municipality_count": len(province_data["municipalities"]),
+            "municipalities": province_data["municipalities"]
+        })
+    return province_list
 
 @app.get("/api/{province}")
 async def get_province(province: str):
     if province not in provinces:
         raise HTTPException(status_code=404, detail="Province not found")
     return {"province": province, "municipalities": municipalities.get(province, [])}
+
+
 
 @app.get("/api/{province}/{municipality}")
 async def get_municipality(province: str, municipality: str):
