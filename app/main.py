@@ -74,6 +74,172 @@ async def root():
         "last_updated": data_cache.get("last_updated")
     }
 
+# NEW ENDPOINTS FOR PROVINCE/MUNICIPALITY ACCESS
+@app.get("/api/{province}/{municipality}")
+async def get_municipality_data(
+    province: str,
+    municipality: str,
+    background_tasks: BackgroundTasks
+):
+    """
+    Get comprehensive data for a specific municipality within a province
+    """
+    province_upper = province.upper()
+    municipality_upper = municipality.upper()
+    
+    # Validate input
+    if province_upper not in geo_data.provinces:
+        raise HTTPException(status_code=404, detail=f"Province '{province}' not found")
+    
+    if municipality_upper not in geo_data.municipalities:
+        raise HTTPException(status_code=404, detail=f"Municipality '{municipality}' not found")
+    
+    # Verify municipality belongs to province
+    mun = geo_data.municipalities[municipality_upper]
+    if mun.province != province_upper:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Municipality '{municipality}' does not belong to province '{province}'"
+        )
+    
+    # Trigger background data refresh
+    background_tasks.add_task(refresh_location_data, province_upper, municipality_upper)
+    
+    try:
+        # Get location information
+        location_info = get_location_info(province_upper, municipality_upper)
+        
+        # Get NASA data for the location
+        nasa_data = await get_nasa_data_for_location(province_upper, municipality_upper)
+        
+        # Calculate all risk assessments
+        risk_assessment = await calculate_comprehensive_risk(nasa_data, location_info)
+        
+        # Calculate environmental data
+        environmental_data = await calculate_environmental_assessment(nasa_data, location_info)
+        
+        # Get relevant alerts
+        alerts_data = await get_location_alerts(province_upper, municipality_upper, risk_assessment)
+        
+        # Generate unified dashboard response
+        dashboard = generate_unified_dashboard(
+            location_info, 
+            risk_assessment, 
+            environmental_data, 
+            alerts_data,
+            nasa_data
+        )
+        
+        return dashboard
+        
+    except Exception as e:
+        logger.error(f"Error generating municipality data for {province}/{municipality}: {e}")
+        return await get_fallback_dashboard(province_upper, municipality_upper)
+
+@app.get("/api/{province}")
+async def get_province_data(
+    province: str,
+    background_tasks: BackgroundTasks
+):
+    """
+    Get comprehensive data for an entire province
+    """
+    province_upper = province.upper()
+    
+    # Validate input
+    if province_upper not in geo_data.provinces:
+        raise HTTPException(status_code=404, detail=f"Province '{province}' not found")
+    
+    # Trigger background data refresh for province
+    background_tasks.add_task(refresh_location_data, province_upper, "")
+    
+    try:
+        # Get province-level information
+        location_info = get_location_info(province_upper, "")
+        
+        # Get NASA data for the province
+        nasa_data = await get_nasa_data_for_location(province_upper, "")
+        
+        # Calculate all risk assessments
+        risk_assessment = await calculate_comprehensive_risk(nasa_data, location_info)
+        
+        # Calculate environmental data
+        environmental_data = await calculate_environmental_assessment(nasa_data, location_info)
+        
+        # Get relevant alerts
+        alerts_data = await get_location_alerts(province_upper, "", risk_assessment)
+        
+        # Get all municipalities in this province
+        municipalities_data = []
+        for mun_id, municipality in geo_data.municipalities.items():
+            if municipality.province == province_upper:
+                # Get basic data for each municipality
+                mun_location_info = get_location_info(province_upper, mun_id)
+                mun_nasa_data = await get_nasa_data_for_location(province_upper, mun_id)
+                mun_risk = await calculate_comprehensive_risk(mun_nasa_data, mun_location_info)
+                
+                municipalities_data.append({
+                    "id": mun_id,
+                    "name": municipality.name,
+                    "risk_level": mun_risk["overall_risk"]["level"],
+                    "risk_score": mun_risk["overall_risk"]["score"],
+                    "environmental_health": 100 - mun_risk["overall_risk"]["score"],
+                    "alerts_count": len(await get_location_alerts(province_upper, mun_id, mun_risk)["active_alerts"])
+                })
+        
+        # Generate province dashboard
+        dashboard = generate_unified_dashboard(
+            location_info, 
+            risk_assessment, 
+            environmental_data, 
+            alerts_data,
+            nasa_data
+        )
+        
+        # Add municipalities summary to province response
+        dashboard["province_summary"] = {
+            "total_municipalities": len(municipalities_data),
+            "municipalities": sorted(municipalities_data, key=lambda x: x["risk_score"], reverse=True),
+            "highest_risk_municipality": max(municipalities_data, key=lambda x: x["risk_score"]) if municipalities_data else None,
+            "lowest_risk_municipality": min(municipalities_data, key=lambda x: x["risk_score"]) if municipalities_data else None
+        }
+        
+        return dashboard
+        
+    except Exception as e:
+        logger.error(f"Error generating province data for {province}: {e}")
+        return await get_fallback_dashboard(province_upper, "")
+
+@app.get("/api/municipalities")
+async def get_all_municipalities():
+    """Get all municipalities across all provinces"""
+    municipalities = []
+    
+    for mun_id, municipality in geo_data.municipalities.items():
+        # Get current risk data if available
+        cache_key = f"{municipality.province}_{mun_id}"
+        current_risk = data_cache["risk_assessments"].get(cache_key, {})
+        
+        municipalities.append({
+            "id": mun_id,
+            "name": municipality.name,
+            "province": municipality.province,
+            "province_name": geo_data.provinces[municipality.province]["name"],
+            "population": municipality.population,
+            "area_km2": municipality.area_km2,
+            "density_km2": round(municipality.population / municipality.area_km2),
+            "economic_activity": municipality.economic_activity,
+            "current_risk_level": current_risk.get("risk_assessment", {}).get("overall_risk", {}).get("level", "UNKNOWN"),
+            "data_endpoint": f"/api/{municipality.province}/{mun_id}"
+        })
+    
+    return {
+        "municipalities": sorted(municipalities, key=lambda x: x["name"]),
+        "total_municipalities": len(municipalities),
+        "last_updated": datetime.utcnow().isoformat()
+    }
+
+# EXISTING ENDPOINTS (UPDATED)
 @app.post("/api/dashboard")
 async def get_unified_dashboard(
     background_tasks: BackgroundTasks,
@@ -140,9 +306,12 @@ async def get_unified_dashboard(
 
 @app.get("/api/provinces")
 async def get_all_provinces():
-    """Get all provinces of Angola"""
+    """Get all provinces of Angola with municipality counts"""
     provinces = []
     for province_id, province_data in geo_data.provinces.items():
+        # Count municipalities for this province
+        municipality_count = sum(1 for mun in geo_data.municipalities.values() if mun.province == province_id)
+        
         provinces.append({
             "id": province_id,
             "name": province_data["name"],
@@ -150,24 +319,33 @@ async def get_all_provinces():
             "population": province_data["population"],
             "area_km2": province_data["area_km2"],
             "risk_profile": province_data["risk_profile"],
-            "municipality_count": len(geo_data.municipalities) if province_id == "LUANDA" else 1
+            "municipality_count": municipality_count,
+            "data_endpoint": f"/api/{province_id}",
+            "municipalities_endpoint": f"/api/provinces/{province_id}/municipalities"
         })
     
     return {
         "provinces": provinces,
         "total_provinces": len(provinces),
+        "total_municipalities": len(geo_data.municipalities),
         "last_updated": datetime.utcnow().isoformat()
     }
 
 @app.get("/api/provinces/{province_id}/municipalities")
 async def get_province_municipalities(province_id: str):
     """Get all municipalities for a specific province"""
-    if province_id not in geo_data.provinces:
+    province_upper = province_id.upper()
+    
+    if province_upper not in geo_data.provinces:
         raise HTTPException(status_code=404, detail=f"Province {province_id} not found")
     
     municipalities = []
-    if province_id == "LUANDA":
-        for mun_id, municipality in geo_data.municipalities.items():
+    for mun_id, municipality in geo_data.municipalities.items():
+        if municipality.province == province_upper:
+            # Get current risk data for each municipality
+            cache_key = f"{province_upper}_{mun_id}"
+            current_risk = data_cache["risk_assessments"].get(cache_key, {})
+            
             municipalities.append({
                 "id": mun_id,
                 "name": municipality.name,
@@ -175,12 +353,18 @@ async def get_province_municipalities(province_id: str):
                 "area_km2": municipality.area_km2,
                 "density_km2": round(municipality.population / municipality.area_km2),
                 "elevation": municipality.elevation,
-                "risk_factors": municipality.risk_factors
+                "risk_factors": municipality.risk_factors,
+                "economic_activity": municipality.economic_activity,
+                "infrastructure_level": municipality.infrastructure_level,
+                "climate_zone": municipality.climate_zone,
+                "current_risk": current_risk.get("risk_assessment", {}).get("overall_risk", {}).get("level", "UNKNOWN"),
+                "risk_score": current_risk.get("risk_assessment", {}).get("overall_risk", {}).get("score", 0),
+                "data_endpoint": f"/api/{province_upper}/{mun_id}"
             })
     
     return {
-        "province": province_id,
-        "province_name": geo_data.provinces[province_id]["name"],
+        "province": province_upper,
+        "province_name": geo_data.provinces[province_upper]["name"],
         "municipalities": municipalities,
         "total_municipalities": len(municipalities),
         "last_updated": datetime.utcnow().isoformat()
@@ -214,7 +398,7 @@ async def get_system_status():
         logger.error(f"Error getting system status: {e}")
         return {"system": "DEGRADED", "error": str(e)}
 
-# Core Business Logic for Unified Dashboard
+# Core Business Logic for Unified Dashboard (UNCHANGED)
 async def calculate_comprehensive_risk(nasa_data: Dict, location_info: Dict) -> Dict:
     """Calculate comprehensive risk assessment"""
     risks = {
@@ -370,7 +554,7 @@ def generate_unified_dashboard(location_info: Dict, risk_assessment: Dict,
         }
     }
 
-# Helper Functions
+# Helper Functions (UNCHANGED)
 def get_location_info(province: str, municipality: str = "") -> Dict:
     """Get comprehensive location information"""
     if municipality and municipality in geo_data.municipalities:
@@ -527,15 +711,13 @@ async def set_fallback_data(province: str, municipality: str = ""):
         "population": {"population_density_km2": 5000, "is_real_data": False, "data_source": "FALLBACK"}
     }
 
+# UPDATED HELPER FUNCTION
 def get_municipalities_by_province(province: str):
     """Get municipalities for a specific province"""
-    if province == "LUANDA":
-        return list(geo_data.municipalities.keys())
-    else:
-        # For other provinces, return empty list or implement based on your data structure
-        return []
+    return [mun_id for mun_id, municipality in geo_data.municipalities.items() 
+            if municipality.province == province]
 
-# Alert Management
+# Alert Management (UNCHANGED)
 def create_alert(province: str, municipality: str, risk_data: Dict, alert_type: str) -> Dict:
     location_name = municipality if municipality else geo_data.provinces[province]["name"]
     overall_risk = risk_data["overall_risk"]
@@ -614,7 +796,7 @@ def check_seasonal_alerts(province: str, municipality: str) -> List[Dict]:
     
     return alerts
 
-# Utility Functions
+# Utility Functions (UNCHANGED)
 def get_risk_level(score):
     if score >= 80:
         return "CRITICAL"
@@ -703,7 +885,7 @@ def is_data_stale():
     except:
         return True
 
-# Fallback Methods
+# Fallback Methods (UNCHANGED)
 async def get_fallback_dashboard(province: str, municipality: str = ""):
     location_info = get_location_info(province, municipality)
     
@@ -779,7 +961,7 @@ async def get_fallback_nasa_data():
         "population": {"population_density_km2": 6000, "is_real_data": False}
     }
 
-# Placeholder functions for missing implementations
+# Placeholder functions for missing implementations (UNCHANGED)
 def generate_alert_description(alert_type, risk_data):
     return f"Alert for {alert_type} - Risk level: {risk_data['overall_risk']['level']}"
 
