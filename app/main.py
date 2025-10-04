@@ -1,11 +1,14 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Body
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import asyncio
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, List, Optional
 import json
+import os
 
 from app.config import AppConfig
 from app.nasa_data_service import RealNASADataService
@@ -33,6 +36,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files and templates
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
 # Configuration
 config = AppConfig()
 geo_data = LuandaGeoData()
@@ -54,24 +61,46 @@ async def startup_event():
     logger.info(f"📊 Monitoring {len(geo_data.municipalities)} municipalities and {len(geo_data.provinces)} provinces")
     await refresh_all_data()
 
-@app.get("/")
-async def root():
-    """Root endpoint with API information"""
+# NEW: Serve the main dashboard interface
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    """Serve the main dashboard interface"""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+# NEW: Demo data endpoint for the interface
+@app.get("/api/demo")
+async def demo_data():
+    """Provide demo data for the interface"""
     return {
-        "message": "SIGA-Angola Unified NASA Dashboard API",
-        "status": "operational",
-        "version": "4.0",
-        "description": "Unified Risk and Environmental Dashboard for Angola",
-        "coverage": {
-            "municipalities": len(geo_data.municipalities),
-            "provinces": len(geo_data.provinces)
-        },
-        "main_endpoint": {
-            "method": "POST",
-            "url": "/api/dashboard",
-            "body_format": {"province": "string", "municipality": "string"}
-        },
-        "last_updated": data_cache.get("last_updated")
+        "provinces": list(geo_data.provinces.keys()),
+        "municipalities": {province: [mun.id for mun in geo_data.municipalities.values() if mun.province == province] 
+                          for province in geo_data.provinces.keys()},
+        "sample_data": {
+            "LUANDA": {
+                "safety_score": 72,
+                "environmental_health": 68,
+                "active_alerts": 3,
+                "risks": {
+                    "flood": 45,
+                    "fire": 28,
+                    "drought": 35,
+                    "air_quality": 62,
+                    "water_quality": 41
+                }
+            },
+            "BENGUELA": {
+                "safety_score": 81,
+                "environmental_health": 75,
+                "active_alerts": 1,
+                "risks": {
+                    "flood": 32,
+                    "fire": 45,
+                    "drought": 28,
+                    "air_quality": 38,
+                    "water_quality": 52
+                }
+            }
+        }
     }
 
 # NEW ENDPOINTS FOR PROVINCE/MUNICIPALITY ACCESS
@@ -398,7 +427,7 @@ async def get_system_status():
         logger.error(f"Error getting system status: {e}")
         return {"system": "DEGRADED", "error": str(e)}
 
-# Core Business Logic for Unified Dashboard (UNCHANGED)
+# Core Business Logic for Unified Dashboard
 async def calculate_comprehensive_risk(nasa_data: Dict, location_info: Dict) -> Dict:
     """Calculate comprehensive risk assessment"""
     risks = {
@@ -554,7 +583,7 @@ def generate_unified_dashboard(location_info: Dict, risk_assessment: Dict,
         }
     }
 
-# Helper Functions (UNCHANGED)
+# Helper Functions
 def get_location_info(province: str, municipality: str = "") -> Dict:
     """Get comprehensive location information"""
     if municipality and municipality in geo_data.municipalities:
@@ -717,7 +746,7 @@ def get_municipalities_by_province(province: str):
     return [mun_id for mun_id, municipality in geo_data.municipalities.items() 
             if municipality.province == province]
 
-# Alert Management (UNCHANGED)
+# Alert Management
 def create_alert(province: str, municipality: str, risk_data: Dict, alert_type: str) -> Dict:
     location_name = municipality if municipality else geo_data.provinces[province]["name"]
     overall_risk = risk_data["overall_risk"]
@@ -796,7 +825,7 @@ def check_seasonal_alerts(province: str, municipality: str) -> List[Dict]:
     
     return alerts
 
-# Utility Functions (UNCHANGED)
+# Utility Functions
 def get_risk_level(score):
     if score >= 80:
         return "CRITICAL"
@@ -885,7 +914,7 @@ def is_data_stale():
     except:
         return True
 
-# Fallback Methods (UNCHANGED)
+# Fallback Methods
 async def get_fallback_dashboard(province: str, municipality: str = ""):
     location_info = get_location_info(province, municipality)
     
@@ -961,7 +990,7 @@ async def get_fallback_nasa_data():
         "population": {"population_density_km2": 6000, "is_real_data": False}
     }
 
-# Placeholder functions for missing implementations (UNCHANGED)
+# Placeholder functions for missing implementations
 def generate_alert_description(alert_type, risk_data):
     return f"Alert for {alert_type} - Risk level: {risk_data['overall_risk']['level']}"
 
