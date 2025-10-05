@@ -35,6 +35,7 @@ class RiskEngine:
             "confidence": 0.9,
             "recommendations": self._get_flood_recommendations(score, rainfall["rainfall_mm"]),
             "community_impact": self._get_flood_community_impact(score),
+            "basic_needs": self._get_flood_basic_needs(score),
             "flood_type": self._get_flood_type(rainfall["rainfall_mm"]),
             "expected_impact_areas": self._get_flood_impact_areas(score)
         }
@@ -49,6 +50,7 @@ class RiskEngine:
             "confidence": 0.85,
             "recommendations": self._get_fire_recommendations(score, fire["fire_count"]),
             "community_impact": self._get_fire_community_impact(score),
+            "basic_needs": self._get_fire_basic_needs(score),
             "fire_intensity": self._get_fire_intensity_level(fire["avg_intensity"]),
             "evacuation_zones": self._get_fire_evacuation_zones(score)
         }
@@ -66,6 +68,7 @@ class RiskEngine:
             "confidence": 0.8,
             "recommendations": self._get_drought_recommendations(score),
             "community_impact": self._get_drought_community_impact(score),
+            "basic_needs": self._get_drought_basic_needs(score),
             "drought_category": self._get_drought_category(score),
             "water_restrictions": self._get_water_restrictions(score)
         }
@@ -80,6 +83,7 @@ class RiskEngine:
             "confidence": 0.85,
             "recommendations": self._get_air_quality_recommendations(score),
             "community_impact": self._get_air_quality_community_impact(score),
+            "basic_needs": self._get_air_quality_basic_needs(score),
             "health_advisory": self._get_health_advisory(air["AQI"]),
             "vulnerable_groups": self._get_vulnerable_groups(air["AQI"])
         }
@@ -94,6 +98,7 @@ class RiskEngine:
             "confidence": 0.8,
             "recommendations": self._get_water_quality_recommendations(score, water["pH"]),
             "community_impact": self._get_water_quality_community_impact(score),
+            "basic_needs": self._get_water_quality_basic_needs(score),
             "health_implications": self._get_water_health_implications(score),
             "water_safety": self._get_water_safety_level(score)
         }
@@ -108,6 +113,7 @@ class RiskEngine:
             "confidence": 0.75,
             "recommendations": self._get_population_recommendations(score, pop["population"]),
             "community_impact": self._get_population_community_impact(score),
+            "basic_needs": self._get_population_basic_needs(score),
             "urban_challenges": self._get_urban_challenges(score),
             "infrastructure_needs": self._get_infrastructure_needs(score)
         }
@@ -121,6 +127,248 @@ class RiskEngine:
             return "High"
         return "Severe"
 
+    # Basic Needs Assessment Methods
+    def _get_flood_basic_needs(self, score):
+        needs = {
+            "water": "Normal supply",
+            "energy": "Normal supply", 
+            "hospitals": "Fully operational",
+            "food": "Normal availability",
+            "shelter": "Adequate",
+            "transportation": "Normal operations"
+        }
+        
+        if score >= 75:
+            needs.update({
+                "water": "EMERGENCY - Contaminated, need bottled water",
+                "energy": "CRITICAL - Widespread outages expected",
+                "hospitals": "OVERWHELMED - Emergency cases only",
+                "food": "SHORTAGE - Distribution disrupted",
+                "shelter": "URGENT - Evacuation shelters needed",
+                "transportation": "SEVERE DISRUPTION - Most routes impassable"
+            })
+        elif score >= 50:
+            needs.update({
+                "water": "BOIL ADVISORY - Treatment required",
+                "energy": "PARTIAL OUTAGES - Some areas affected",
+                "hospitals": "INCREASED DEMAND - Prepare for emergencies",
+                "food": "LIMITED - Stock essential supplies",
+                "shelter": "AT RISK - Prepare evacuation plans",
+                "transportation": "MAJOR DISRUPTIONS - Many routes affected"
+            })
+        elif score >= 20:
+            needs.update({
+                "water": "MONITOR QUALITY - Possible contamination",
+                "energy": "STABLE - Minor localized issues",
+                "hospitals": "NORMAL - Increased readiness",
+                "food": "ADEQUATE - Maintain supplies",
+                "shelter": "SECURE - Monitor conditions",
+                "transportation": "MINOR DISRUPTIONS - Some routes affected"
+            })
+        
+        return needs
+
+    def _get_fire_basic_needs(self, score):
+        needs = {
+            "water": "Normal supply",
+            "energy": "Normal supply",
+            "hospitals": "Fully operational", 
+            "food": "Normal availability",
+            "shelter": "Adequate",
+            "transportation": "Normal operations"
+        }
+        
+        if score >= 75:
+            needs.update({
+                "water": "CRITICAL - Firefighting priority, restrictions",
+                "energy": "WIDESPREAD OUTAGES - Grid damage",
+                "hospitals": "OVERLOADED - Respiratory emergencies",
+                "food": "DISRUPTED - Evacuation impacts",
+                "shelter": "EMERGENCY - Mass evacuations needed",
+                "transportation": "SEVERELY DISRUPTED - Road closures, poor visibility"
+            })
+        elif score >= 50:
+            needs.update({
+                "water": "HIGH DEMAND - Firefighting needs",
+                "energy": "RISK OF OUTAGES - Grid instability",
+                "hospitals": "INCREASED LOAD - Respiratory cases",
+                "food": "STABLE - Prepare for disruptions",
+                "shelter": "PREPARE EVACUATION - At-risk areas",
+                "transportation": "SIGNIFICANT DISRUPTIONS - Smoke, closures"
+            })
+        elif score >= 20:
+            needs.update({
+                "water": "ADEQUATE - Monitor supply",
+                "energy": "STABLE - Watch for outages", 
+                "hospitals": "NORMAL - Prepare for smoke-related cases",
+                "food": "NORMAL - Maintain supplies",
+                "shelter": "SECURE - Monitor fire progression",
+                "transportation": "MINOR DISRUPTIONS - Some smoke impacts"
+            })
+        
+        return needs
+
+    def _get_drought_basic_needs(self, score):
+        needs = {
+            "water": "Normal supply",
+            "energy": "Normal supply",
+            "hospitals": "Fully operational",
+            "food": "Normal availability",
+            "shelter": "Adequate", 
+            "transportation": "Normal operations"
+        }
+        
+        if score >= 75:
+            needs.update({
+                "water": "CRITICAL SHORTAGE - Rationing implemented",
+                "energy": "REDUCED CAPACITY - Hydropower limited",
+                "hospitals": "STRESSED - Water-dependent services affected",
+                "food": "SHORTAGES - Crop failures, price increases",
+                "shelter": "AT RISK - Water scarcity issues",
+                "transportation": "IMPACTED - Dust storms, reduced visibility"
+            })
+        elif score >= 50:
+            needs.update({
+                "water": "RESTRICTED - Conservation measures",
+                "energy": "STABLE - Some hydropower reduction",
+                "hospitals": "OPERATIONAL - Water conservation needed",
+                "food": "INCREASING PRICES - Supply chain stress",
+                "shelter": "ADEQUATE - Water efficiency important",
+                "transportation": "MINOR IMPACTS - Dust concerns"
+            })
+        elif score >= 20:
+            needs.update({
+                "water": "ADEQUATE - Conservation encouraged",
+                "energy": "NORMAL - Monitor hydropower levels",
+                "hospitals": "NORMAL - Water efficiency practices",
+                "food": "STABLE - Monitor supplies",
+                "shelter": "SECURE - Water conservation",
+                "transportation": "NORMAL - Minimal impacts"
+            })
+        
+        return needs
+
+    def _get_air_quality_basic_needs(self, score):
+        needs = {
+            "water": "Normal supply",
+            "energy": "Normal supply",
+            "hospitals": "Fully operational",
+            "food": "Normal availability",
+            "shelter": "Adequate",
+            "transportation": "Normal operations"
+        }
+        
+        if score >= 75:
+            needs.update({
+                "water": "INDOOR USE RECOMMENDED - Avoid outdoor collection",
+                "energy": "INCREASED DEMAND - Indoor air filtration",
+                "hospitals": "OVERWHELMED - Respiratory emergencies surge",
+                "food": "DELIVERY RECOMMENDED - Limit outdoor exposure",
+                "shelter": "SEALED ENVIRONMENTS - Air filtration needed",
+                "transportation": "REDUCED SERVICES - Poor visibility, health risks"
+            })
+        elif score >= 50:
+            needs.update({
+                "water": "ADEQUATE - Limit outdoor exposure",
+                "energy": "STABLE - Some increased usage",
+                "hospitals": "INCREASED LOAD - Respiratory cases rising",
+                "food": "STABLE - Delivery options recommended",
+                "shelter": "INDOOR FOCUS - Limit outdoor time",
+                "transportation": "MODERATE DISRUPTIONS - Reduced outdoor activity"
+            })
+        elif score >= 20:
+            needs.update({
+                "water": "NORMAL - Sensitive groups take care",
+                "energy": "NORMAL - Minimal impact",
+                "hospitals": "NORMAL - Monitor sensitive patients",
+                "food": "NORMAL - Outdoor activities limited for sensitive groups",
+                "shelter": "SECURE - Normal operations",
+                "transportation": "MINOR IMPACTS - Some visibility issues"
+            })
+        
+        return needs
+
+    def _get_water_quality_basic_needs(self, score):
+        needs = {
+            "water": "Normal supply",
+            "energy": "Normal supply",
+            "hospitals": "Fully operational",
+            "food": "Normal availability",
+            "shelter": "Adequate",
+            "transportation": "Normal operations"
+        }
+        
+        if score >= 75:
+            needs.update({
+                "water": "UNSAFE - Emergency distribution needed",
+                "energy": "STABLE - Water treatment plants stressed",
+                "hospitals": "OVERLOADED - Waterborne illness cases",
+                "food": "CONTAMINATION RISK - Agriculture affected",
+                "shelter": "WATER CRISIS - Alternative sources needed",
+                "transportation": "MINIMAL IMPACT - Waterway transport affected"
+            })
+        elif score >= 50:
+            needs.update({
+                "water": "TREATMENT REQUIRED - Boil water advisory",
+                "energy": "STABLE - Increased treatment costs",
+                "hospitals": "INCREASED CASES - Gastrointestinal illnesses",
+                "food": "MONITOR QUALITY - Irrigation concerns",
+                "shelter": "WATER TREATMENT NEEDED - Filtration systems",
+                "transportation": "MINIMAL IMPACT - Some waterway issues"
+            })
+        elif score >= 20:
+            needs.update({
+                "water": "MONITOR QUALITY - Some treatment advised",
+                "energy": "NORMAL - Minimal impact",
+                "hospitals": "NORMAL - Watch for water-related illnesses",
+                "food": "ADEQUATE - Monitor irrigation water",
+                "shelter": "SECURE - Water testing recommended",
+                "transportation": "NORMAL - Minimal impact"
+            })
+        
+        return needs
+
+    def _get_population_basic_needs(self, score):
+        needs = {
+            "water": "Normal supply",
+            "energy": "Normal supply",
+            "hospitals": "Fully operational",
+            "food": "Normal availability",
+            "shelter": "Adequate",
+            "transportation": "Normal operations"
+        }
+        
+        if score >= 75:
+            needs.update({
+                "water": "INFRASTRUCTURE STRAIN - Supply shortages possible",
+                "energy": "OVERLOADED - Frequent outages, capacity issues",
+                "hospitals": "OVERWHELMED - Long wait times, resource shortages",
+                "food": "SHORTAGES - Supply chain strain, price inflation",
+                "shelter": "CRITICAL SHORTAGE - Housing crisis, overcrowding",
+                "transportation": "SEVERE CONGESTION - Gridlock, extended commute times"
+            })
+        elif score >= 50:
+            needs.update({
+                "water": "INCREASING DEMAND - Infrastructure stress",
+                "energy": "GROWING DEMAND - Occasional brownouts",
+                "hospitals": "UNDER PRESSURE - Extended wait times",
+                "food": "INFLATION PRESSURES - Supply chain stress",
+                "shelter": "SHORTAGE DEVELOPING - Affordable housing crisis",
+                "transportation": "HEAVY CONGESTION - Delays, infrastructure strain"
+            })
+        elif score >= 20:
+            needs.update({
+                "water": "ADEQUATE - Monitor demand growth",
+                "energy": "STABLE - Plan for capacity increases",
+                "hospitals": "ADEQUATE - Prepare for increased demand",
+                "food": "SUFFICIENT - Monitor supply chains",
+                "shelter": "ADEQUATE - Plan for growth management",
+                "transportation": "MANAGEABLE - Some congestion issues"
+            })
+        
+        return needs
+
+    # [Keep all the previous recommendation and impact methods from the previous version]
     # Flood-related methods
     def _get_flood_recommendations(self, score, rainfall_mm):
         recommendations = []
@@ -179,6 +427,7 @@ class RiskEngine:
         else:
             return ["Minimal impact areas"]
 
+    # [Keep all other existing methods for fire, drought, air quality, water quality, population...]
     # Fire-related methods
     def _get_fire_recommendations(self, score, fire_count):
         recommendations = []
