@@ -101,5 +101,6 @@ async def get_location_alerts(province, municipality):
         "drought_risk": risk_engine.calculate_drought_risk(rainfall),
         "air_quality_risk": risk_engine.calculate_air_quality_risk(airq),
         "water_quality_risk": risk_engine.calculate_water_quality_risk(waterq),
-        "population_pressure": risk_engine.calculate_population_pressure(pop)
+        "population_pressure": risk_engine.calculate_population_pressure(pop),
+        "water_quantity":rainfall
     }

@@ -379,7 +379,7 @@
                 }
                 
                 const realData = await response.json();
-                console.log(realData)
+                console.log(realData.alerts)
                 updateDashboardWithRealData(realData.alerts, province, municipality);
                 
             } catch (error) {
